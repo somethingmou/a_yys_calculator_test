@@ -21,7 +21,10 @@ def write_mitama_result(filename, comb_data_list,jipindu_type,
     detail_sheet_num += 1
 
     write_header_row(result_sheet, 'result')
-    #此处需增加一列“极品度／有效条数的标题头”
+
+    if jipindu_type:
+        detail_sheet.write(0, 15, label=u'极品度')
+
     write_header_row(detail_sheet, 'detail')
 
     result_row = 1
