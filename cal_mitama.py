@@ -8,7 +8,7 @@ from calculator_of_Onmyoji import cal_and_filter as cal
 from calculator_of_Onmyoji import load_data
 from calculator_of_Onmyoji import write_data
 
-
+#null
 ENCODINGS = ['gbk', 'big5', 'cp932']
 
 
