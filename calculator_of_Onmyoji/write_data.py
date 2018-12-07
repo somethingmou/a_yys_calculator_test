@@ -10,7 +10,7 @@ import data_format
 MAX_ROW = 65532  # divided by 6 for each result is a combination of 6 details
 
 
-def write_mitama_result(filename, comb_data_list,jipindu_type,
+def write_mitama_result(filename, comb_data_list,
                         base_att=0, base_hp=0, base_critdamage=0):
     workbook = xlwt.Workbook(encoding='utf-8')
     result_num = 0
@@ -21,10 +21,6 @@ def write_mitama_result(filename, comb_data_list,jipindu_type,
     detail_sheet_num += 1
 
     write_header_row(result_sheet, 'result')
-
-    if jipindu_type:
-        detail_sheet.write(0, 15, label=u'极品度')
-
     write_header_row(detail_sheet, 'detail')
 
     result_row = 1
@@ -59,14 +55,6 @@ def write_mitama_result(filename, comb_data_list,jipindu_type,
                 detail_sheet.write(detail_row, 1, label=mitama_serial)
                 write_mitama_row(detail_sheet, mitama_prop,
                                  detail_row, start_col=2)
-                if jipindu_type:
-                    sum_score = 0
-                    for mi in jipindu_type :
-                        sum_score = sum_score + mitama_prop.get(mi) / data_format.MITAMA_GROWTH[mi].get(u"最小成长值")
-                        if mitama_prop.get(mi) > data_format.MITAMA_GROWTH[mi].get(u"副属性最大值"):
-                            sum_score = sum_score - data_format.MITAMA_GROWTH[mi].get(u"主属性") / data_format.MITAMA_GROWTH[mi].get(u"最小成长值") 
-                    detail_sheet.write(detail_row, 15, label=sum_score)
-                    
                 detail_row += 1
 
             # mimata serial in result sheet is the comb of mitama_data serials
@@ -95,6 +83,8 @@ def write_header_row(worksheet, sheet_type):
         header_row = data_format.RESULT_HEADER
     elif sheet_type == 'result_combs':
         header_row = data_format.RESULT_COMB_HEADER
+    elif sheet_type == 'data_with_esp':
+        header_row = data_format.MITAMA_COL_NAME_ZH + data_format.MITAMA_EPS_EXTEND_HEADER
     else:
         header_row = data_format.MITAMA_COL_NAME_ZH
 
@@ -168,6 +158,52 @@ def write_original_mitama_data(filename, data):
         data_sheet.write(row, 0, label=serial)
         write_mitama_row(data_sheet, prop, row, 1,
                          header_key=data_format.MITAMA_COL_NAME_ZH)
+        row += 1
+
+    ignore_sheet = workbook.add_sheet(u'已使用')
+    write_header_row(ignore_sheet, 'detail')
+
+    workbook.save(filename)
+
+
+def write_original_mitama_data_with_esp(filename, data):
+    workbook = xlwt.Workbook(encoding='utf-8')
+
+    data_sheet = workbook.add_sheet(u'御魂')
+    write_header_row(data_sheet, 'data_with_esp')
+
+    mitama_growth = data_format.MITAMA_GROWTH
+
+    mitama_esp_head = data_format.MITAMA_EPS_EXTEND_HEADER
+
+    mitama_esp_type = data_format.MITAMA_EPS
+
+    row = 1
+
+    for serial, prop in data.iteritems():
+        data_sheet.write(row, 0, label=serial)
+        write_mitama_row(data_sheet, prop, row, 1,
+                         header_key=data_format.MITAMA_COL_NAME_ZH)
+
+        col_esp_extend = len(data_format.MITAMA_COL_NAME_ZH)
+
+        for esp_main in mitama_esp_head :
+            es_prop = mitama_esp_type.get(esp_main)
+       
+            prop_num = 0
+            for select_prop in es_prop:
+                prop_value = prop.get(select_prop, 0.0)
+                main_prop_value = mitama_growth[select_prop][u"主属性"]
+                max_prop_value = mitama_growth[select_prop][u"副属性最大值"]
+                if prop_value >= max_prop_value:
+                    prop_value -= main_prop_value
+                prop_num += prop_value / mitama_growth[select_prop][u"最小成长值"]
+
+            if prop_num < 0:
+                prop_num =0
+            data_sheet.write(row, col_esp_extend, label=prop_num)
+            col_esp_extend += 1
+
         row += 1
 
     ignore_sheet = workbook.add_sheet(u'已使用')

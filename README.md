@@ -19,8 +19,10 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -M MITAMA_SUIT, --mitama-suit MITAMA_SUIT
-                        期望的御魂x件套类型，多个限制用英文句号.间隔，例如"-M 针女,4"为针女至少4件，"-M
-                        针女,4.破势,2"为针女4件+破势2件
+                        期望的御魂x件套类型，多个限制用英文句号.间隔，例如
+                        "-M 针女,4"为针女至少4件，
+                        "-M 针女,4.破势,2"为针女4件+破势2件，
+                        "-M 暴击,2.暴击,2.暴击,2"为3个暴击两件套
   -P PROP_LIMIT, --prop-limit PROP_LIMIT
                         期望限制的属性下限，多个属性条件用英文句号.间隔, 例如"-P
                         暴击,90.暴击伤害,70"为暴击至少90且暴击伤害至少70
@@ -48,13 +50,13 @@ optional arguments:
   -AO ATTACK_ONLY, --attack-only ATTACK_ONLY
                         是否只计算输出类御魂，默认为False。"-AO
                         True"为只计算套装属性为攻击加成、暴击和首领御魂的套装组合
-  -J  Jipindu, --jipindu_input
-                        限定御魂的有效属性和每个位置分别的有效属性条数要求
-                        例如"-J 暴击,暴击伤害,速度,攻击加成.5,3,5,3,5,0
-                        意味着有效属性定位为暴击、暴击伤害、速度、攻击加成这几类
-                        且1~6号位各自的有效条数分别不低于5条、3条、5条、3条、5条、0条
-                        有效属性的定义范围可以是1个或者多个甚至超过4个，有效条数不应该超过9
-
+  -ESP EFFECTIVE_SECONDARY_PROP, --effective-secondary-prop EFFECTIVE_SECONDARY_PROP
+                        设定御魂的有效副属性，用逗号,间隔例如"-ESP
+                        暴击,暴击伤害,速度,攻击加成"意味着有效副属性定位为暴击、暴击伤害、速度、攻击加成
+  -ESPN EFFECTIVE_SECONDARY_PROP_NUM, --effective-secondary-prop-num EFFECTIVE_SECONDARY_PROP_NUM
+                        限定1-6号位御魂的有效副属性加成次数，用逗号,间隔与-ESP配合使用例如"-ESP 暴击 -ESPN 5,
+                        3,5,3,5,0"意味着1~6号位各自的有效副属性加成次数依次不少于5,3,5,3,5,01号位副属性暴击
+                        加成次数不少于5即暴击不低于12(2.4*5)
 ```
 
 ## Usage of mitama puller
@@ -79,6 +81,22 @@ usage: make sure json files are in the same directory with convert_json2xls.py
 python convert_json2xls.py
 ```
 
+## Usage of mitama json converter for 附带有效副属性的展示
+
+```
+usage: make sure json files are in the same directory with convert_json2xls.py
+
+python convert_json2xls.py -ESPS True
+
+在转换成的excel中的“输出类”、“奶盾类”、“命中类”、“双堆类”下面的值为该类包含有效属性的有效条数，
+其中:
+“输出类”为包含 攻击加成、速度、暴击、暴击伤害的有效条数'
+“奶盾类”为包含 生命加成、速度、暴击、暴击伤害的有效条数'
+“命中类”为包含 效果命中、速度的有效条数'
+“双堆类”为包含 效果命中、效果抵抗、速度的有效条数'
+“说明：首领御魂的固有属性也加入计算，因此最大可能达到12分以上”
+```
+
 ## Usage of result\_combination
 
 ```
@@ -95,5 +113,17 @@ python calculator_of_Onmyoji/result_combination.py
 ## Cal example
 ```python calculator_of_Onmyoji/cal_mitama.py example/victor.xls v_result.xls -M 针女,4 -P 暴击,90.暴击伤害,50 -2P 攻击加成,55 -4P 攻击加成,55 -6P 暴击,55 -IG 天狗```
 
+## Cal example for 超星破势荒骷髅茨木
+```python calculator_of_Onmyoji/cal_mitama.py example/victor.xls v_result.xls -M 破势,4.荒骷髅,2 -P 暴击,90.速度,16 -2P 攻击加成,54 -4P 攻击加成,54 -6P 暴击,55 -DL 3216,150,17120 -AO True -ESP 暴击,暴击伤害,攻击加成,速度 -ESPN 3,3,3,3,3,0```
+
+## Cal example for 183速招财命中凤凰火
+```python calculator_of_Onmyoji/cal_mitama.py example/victor.xls v_result.xls -M 招财猫,4 -P 速度,77,效果命中,100 -2P 速度,55 -4P 效果命中,55  -AS False -ESP 速度,效果命中 -ESPN 3,3,3,0,3,3```
+
+## Cal example for 辉夜姬蚌精盾（90+5=95暴，未满暴）
+```python calculator_of_Onmyoji/cal_mitama.py example/victor.xls v_result.xls -M 蚌精,4 -P 暴击,90 -2P 生命加成,54 -4P 生命加成,54 -6P 暴击,55  -HL 13785,150,40000 -AS False -ESP 暴击,暴击伤害,生命加成,速度 -ESPN 5,3,5,3,5,0```
+
+## Cal example for 散件爆伤面灵气
+```python calculator_of_Onmyoji/cal_mitama.py example/victor.xls v_result.xls -M 暴击,2.暴击,2.暴击,2 -P 暴击,92 -2P 攻击加成,54 -4P 攻击加成,54 -6P 暴击伤害,88```
+
 ## Make tar
-```tar zcf calculator.tar.gz calculator_of_Onmyoji example dist LICENSE README.md requirements.txt setup.* win_compile.txt```
+```tar zcf calculator.tar.gz calculator_of_Onmyoji example dist LICENSE README.md requirements.txt setup.* win_compile.txt ChangeLog```

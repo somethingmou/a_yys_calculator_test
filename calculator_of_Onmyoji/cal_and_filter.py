@@ -11,8 +11,8 @@ def filter_loc_and_type(data_dict,
                         l4_prop_limit,
                         l6_prop_limit,
                         attack_only,
-                        jipindu_type,
-                        jipindu_score):
+                        es_prop,
+                        es_prop_num):
     if len(data_dict) != 6:
         raise KeyError("combination dict source must have 6 keys")
 
@@ -25,6 +25,7 @@ def filter_loc_and_type(data_dict,
             data_dict[loc] = filter_mitama_type(data,
                                                 data_format.ATTACK_MITAMA_TYPE)
 
+    # 246号位主属性过滤
     if l2_prop_limit:
         data_dict[2] = filter_loc_prop(data_dict[2], l2_prop_limit)
     if l4_prop_limit:
@@ -32,20 +33,13 @@ def filter_loc_and_type(data_dict,
     if l6_prop_limit:
         data_dict[6] = filter_loc_prop(data_dict[6], l6_prop_limit)
 
-    #example:
-    #prop_type =  [u'攻击加成',  u'暴击', u'暴击伤害', u'速度']
-    #prop_score = [5,3,5,3,5,0]
-
-    if jipindu_type:
-        prop_type = jipindu_type
-        prop_score = jipindu_score
-
-        data_dict[1] = filter_loc_prop2(data_dict[1], prop_type, prop_score[0])
-        data_dict[2] = filter_loc_prop2(data_dict[2], prop_type, prop_score[1])
-        data_dict[3] = filter_loc_prop2(data_dict[3], prop_type, prop_score[2])
-        data_dict[4] = filter_loc_prop2(data_dict[4], prop_type, prop_score[3])
-        data_dict[5] = filter_loc_prop2(data_dict[5], prop_type, prop_score[4])
-        data_dict[6] = filter_loc_prop2(data_dict[6], prop_type, prop_score[5])
+    # 全位置副属性过滤
+    if es_prop and es_prop_num:
+        for loc, data_list in data_dict.iteritems():
+            data_dict[loc] = \
+                filter_effective_secondary_prop(data_list,
+                                                es_prop,
+                                                es_prop_num[loc-1])
 
     print('after filter by loc prop and type %s'
           % str([len(d) for d in data_dict.values()]))
@@ -53,75 +47,135 @@ def filter_loc_and_type(data_dict,
     return dict(zip(range(1, 7), [d for d in data_dict.values()]))
 
 
-def make_combination(mitama_data, mitama_type_limit={}, all_suit=True):
+def find_mtype_candidates(mitama_type='ALL'):
+    candidates = []
+    if mitama_type == 'ALL':
+        candidates = data_format.MITAMA_TYPES
+    elif mitama_type in data_format.MITAMA_TYPES:
+        candidates.append(mitama_type)
+    elif mitama_type in data_format.MITAMA_PROPS:
+        for m_type in data_format.MITAMA_TYPES:
+            if data_format.MITAMA_ENHANCE[m_type][u"加成类型"] == mitama_type:
+                candidates.append(m_type)
+    return candidates
+
+
+def gen_mitama_combos(mitama_type_limit=None, all_suit=True):
+    if mitama_type_limit is None:
+        mitama_type_limit = []
+    main_type, secondary_type = None, []
+    fixed_pos = 0
+    for m_type, limit_count in mitama_type_limit:
+        if m_type not in data_format.MITAMA_TYPES and\
+           m_type not in data_format.MITAMA_PROPS:
+            continue
+        if limit_count == 4:
+            main_type = m_type
+            fixed_pos += 4
+        elif limit_count == 2:
+            secondary_type.append(m_type)
+            fixed_pos += 2
+
+    if main_type is not None:
+        main_candidates = find_mtype_candidates(main_type)
+        if fixed_pos == 6 or all_suit:  # 4+2
+            if secondary_type:
+                secondary_candidates = find_mtype_candidates(secondary_type[0])
+            elif all_suit:
+                secondary_candidates = find_mtype_candidates()
+            for m_type in main_candidates:
+                for s_type in secondary_candidates:
+                    yield [m_type] * 4 + [s_type] * 2
+        else:       # 4+1+1
+            yield [m_type] * 4 + ['ALL', 'ALL']
+
+    elif fixed_pos == 6 or (all_suit and fixed_pos >= 2):    # 2+2+2, 2+2+any, 2+any+any
+        candidates = []
+        for m_type in secondary_type:
+            candidates.append(find_mtype_candidates(m_type))
+        for i in range((6-fixed_pos)//2):
+            candidates.append(find_mtype_candidates())
+        generated = {}
+        for t1, t2, t3 in itertools.product(*candidates):
+            if frozenset((t1, t2, t3)) not in generated and\
+               t1 != t2 and t2 != t3 and t1 != t3:
+                generated[frozenset((t1, t2, t3))] = True
+                yield [t1, t2, t3]*2
+    elif fixed_pos >= 2:
+        candidates = []
+        for m_type in secondary_type:
+            candidates.append(find_mtype_candidates(m_type))
+
+        for i in range(6-fixed_pos):
+            candidates.append(["ALL"])
+        generated = {}
+        for combo in itertools.product(*candidates):
+            if len(set(combo[:fixed_pos//2])) != fixed_pos//2:
+                continue
+            t1, t2, t3, t4, t5, t6 = combo[:fixed_pos//2]*2 + combo[fixed_pos//2:]
+            if frozenset((t1, t2, t3, t4, t5, t6)) not in generated:
+                generated[frozenset((t1, t2, t3, t4, t5, t6))] = True
+                yield [t1, t2, t3, t4, t5, t6]
+    else:
+        yield None
+
+
+def gen_mitama_permutations(mitama_type_limit=None, all_suit=True):
+    if mitama_type_limit is None:
+        mitama_type_limit = []
+    generated = {}
+    for m_combos in gen_mitama_combos(mitama_type_limit, all_suit):
+        if m_combos is None:
+            yield None
+        else:
+            for m_permu in itertools.permutations(m_combos):
+                if tuple(m_permu) not in generated:
+                    generated[tuple(m_permu)] = True
+                    yield m_permu
+
+
+def make_combination(mitama_data, mitama_type_limit=None, all_suit=True):
+    if mitama_type_limit is None:
+        mitama_type_limit = []
     main_type, secondary_type = None, None
     total_comb = 0
-    for m_type in mitama_type_limit:
-        if mitama_type_limit[m_type] == 4:
-            main_type = m_type
-        elif mitama_type_limit[m_type] == 2:
-            secondary_type = m_type
 
     def filter_mitama_by_type(mitama, desired_type):
         mitama_info = mitama.values()[0]
-        if (mitama_info[u'御魂类型'] == desired_type):
+        if mitama_info[u'御魂类型'] == desired_type:
             return True
         else:
             return False
 
-    if not main_type:
-        total_comb = reduce(lambda x, y: x*y, map(len, mitama_data.values()))
-        print("Total combinations: {}".format(total_comb))
-        return itertools.product(*mitama_data.values()), total_comb
-    else:
-        # separate the main type mitamas and all other mitamas
-        main_mitama = dict(zip(range(1, 7), [None]*6))
-        other_mitama = dict(zip(range(1, 7), [None]*6))
-        for i in range(1, 7):
-            main_mitama[i] = filter(lambda x:
-                                    filter_mitama_by_type(x, main_type),
-                                    mitama_data[i])
-            other_mitama[i] = filter(lambda x:
-                                     not filter_mitama_by_type(x, main_type),
-                                     mitama_data[i])
-
-        if secondary_type:
-            secondary_mitama = dict(zip(range(1, 7), [None]*6))
+    def classify_by_type():
+        mitama_data_by_type = {}
+        for m_type in data_format.MITAMA_TYPES:
+            mitama_data_by_type[m_type] = {}
             for i in range(1, 7):
-                secondary_mitama[i] = filter(
-                    lambda x: filter_mitama_by_type(x, secondary_type),
-                    mitama_data[i])
+                mitama_data_by_type[m_type][i] =\
+                    filter(lambda x: filter_mitama_by_type(x, m_type),
+                           mitama_data[i])
+        return mitama_data_by_type
 
-        res = []
-        # chosen type only
-        total_comb += reduce(lambda x, y: x*y, map(len, main_mitama.values()))
-        res.append(itertools.product(*main_mitama.values()))
+    mitama_data_by_type = None
+    res = []
+    for m_combos in gen_mitama_permutations(mitama_type_limit, all_suit):
+        if m_combos is None:
+            total_comb = reduce(lambda x, y: x*y,
+                                map(len, mitama_data.values()))
+            print("Total combinations: {}".format(total_comb))
+            return itertools.product(*mitama_data.values()), total_comb
+        else:
+            if mitama_data_by_type is None:
+                mitama_data_by_type = classify_by_type()
+            mitama_grp = {x: mitama_data[x] if m_type == 'ALL' else mitama_data_by_type[m_type][x]
+                          for x, m_type in zip(range(1, 7), m_combos)}
+            total_comb += reduce(lambda x, y: x*y,
+                                 map(len, mitama_grp.values()))
+            res.append(itertools.product(*mitama_grp.values()))
 
-        # 4+2
-        for i in range(1, 7):
-            for j in range(i+1, 7):
-                mitama_grp = {x: main_mitama[x] for x in range(1, 7)}
-                if secondary_type:
-                    mitama_grp[i] = secondary_mitama[i]
-                    mitama_grp[j] = secondary_mitama[j]
-                else:
-                    mitama_grp[i] = other_mitama[i]
-                    mitama_grp[j] = other_mitama[j]
-                total_comb += reduce(lambda x, y: x*y,
-                                     map(len, mitama_grp.values()))
-                res.append(itertools.product(*mitama_grp.values()))
-
-        # 5+1
-        if not (all_suit or secondary_type):
-            for i in range(1, 7):
-                mitama_grp = {x: main_mitama[x] for x in range(1, 7)}
-                mitama_grp[i] = other_mitama[i]
-                total_comb += reduce(lambda x, y: x*y,
-                                     map(len, mitama_grp.values()))
-                res.append(itertools.product(*mitama_grp.values()))
-
-        print("Total combinations: {}".format(total_comb))
-        return itertools.chain(*res), total_comb
+    print("Total combinations: {}".format(total_comb))
+    return itertools.chain(*res), total_comb
 
 
 def filter_loc_prop(data_list, prop_limit):
@@ -137,23 +191,25 @@ def filter_loc_prop(data_list, prop_limit):
     return filter(prop_value_le_min, data_list)
 
 
-def filter_loc_prop2(data_list, prop_type, prop_score):
-    def prop_value_le_min2(mitama):
-        mitama_info = mitama.values()[0]
-        sum_score = 0
-        for mi in prop_type :
-            sum_score = sum_score + mitama_info.get(mi) / data_format.MITAMA_GROWTH[mi].get(u"最小成长值")
-            if mitama_info.get(mi) > data_format.MITAMA_GROWTH[mi].get(u"副属性最大值"):
-                sum_score = sum_score - data_format.MITAMA_GROWTH[mi].get(u"主属性") / data_format.MITAMA_GROWTH[mi].get(u"最小成长值")
+def filter_effective_secondary_prop(data_list, es_prop, es_prop_num):
+    mitama_growth = data_format.MITAMA_GROWTH
 
-        if sum_score > prop_score:
+    def es_prop_num_le_min(mitama):
+        mitama_info = mitama.values()[0]
+        prop_num = 0
+        for prop in es_prop:
+            prop_value = mitama_info.get(prop, 0.0)
+            main_prop_value = mitama_growth[prop][u"主属性"]
+            if prop_value >= main_prop_value:
+                prop_value -= main_prop_value
+            prop_num += prop_value / mitama_growth[prop][u"最小成长值"]
+
+        if prop_num >= es_prop_num:
             return True
         else:
             return False
 
-
-
-    return filter(prop_value_le_min2, data_list)
+    return filter(es_prop_num_le_min, data_list)
 
 
 def filter_mitama_type(data_list, mitama_type_list):
@@ -216,14 +272,6 @@ def fit_mitama_type(mitama_comb_list, mitama_type_limit, total_comb,
                 if count < 2:
                     is_suit = False
             if not is_suit:
-                continue
-
-        if mitama_type_limit:
-            fit_type_limit = True
-            for expect_type, expect_num in mitama_type_limit.items():
-                if mitama_type_count.get(expect_type, 0) < expect_num:
-                    fit_type_limit = False
-            if not fit_type_limit:
                 continue
 
         comb_data = {'sum': {u'御魂计数': mitama_type_count},
