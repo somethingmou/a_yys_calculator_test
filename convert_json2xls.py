@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("-ESPS", "--effective-secondary-prop-show",
                     type=str2bool,
-                    default=False,
+                    default=True,
                     help=u'是否展示副属性的有效条数，默认为False。'
                          u'"-ESPS True"为展示副属性有效条数'
                          u'“输出类”为包含 攻击加成、速度、暴击、暴击伤害的有效条数'
